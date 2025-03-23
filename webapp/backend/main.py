@@ -1,10 +1,11 @@
+# main.py
 # WARNING: THIS IS A VERY SLOPPY IMPLEMENTATION.
 # The absolute barebones we could do, not knowing any actual web development.
 from http.client import HTTPException
 from fastapi import FastAPI, Body
 import plotly.graph_objects as go
 import numpy as np
-from modularCluster import *
+from webapp.backend.modularCluster import *
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.responses import PlainTextResponse
