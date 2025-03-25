@@ -1,4 +1,4 @@
-
+// app.js
 // function to generate heatmaps.
 function onclick1(){
     var d = document.getElementById("dept").value;
