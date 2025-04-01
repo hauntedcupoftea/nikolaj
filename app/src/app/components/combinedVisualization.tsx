@@ -1,6 +1,25 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { DataRow } from "../types";
 import { getMin, getMax } from "./utils";
+
+// Define an interface for Plotly scattermapbox traces.
+export interface ScatterMapboxTrace {
+  type: "scattermapbox";
+  mode: string;
+  lat: number[];
+  lon: number[];
+  marker: {
+    size: number;
+    color: string;
+    opacity?: number;
+  };
+  name: string;
+  showlegend?: boolean;
+  line?: {
+    width: number;
+    color: string;
+  };
+}
 
 // Generates a heatmap HTML string using Plotly's densitymapbox.
 // The colorscale is defined as red, orange, yellow, green, cyan, dark blue.
@@ -14,7 +33,6 @@ export function genHeatMapHTML(data: DataRow[]): string {
   );
   const lat = validData.map((row) => Number(row.Latitude));
   const lon = validData.map((row) => Number(row.Longitude));
-  // Define the colorscale spectrum.
   const colorscale = [
     [0, "red"],
     [0.2, "orange"],
@@ -23,9 +41,7 @@ export function genHeatMapHTML(data: DataRow[]): string {
     [0.8, "cyan"],
     [1, "darkblue"],
   ];
-  // Use the 'type' property as weight; change to ones for pure frequency.
   const z = validData.map((row) => row.type || 0);
-  // Use our helper functions to compute min and max.
   const centerLat = lat.length ? (getMin(lat) + getMax(lat)) / 2 : 0;
   const centerLon = lon.length ? (getMin(lon) + getMax(lon)) / 2 : 0;
 
@@ -53,13 +69,13 @@ export function genHeatMapHTML(data: DataRow[]): string {
           lat: ${JSON.stringify(lat)},
           lon: ${JSON.stringify(lon)},
           z: ${JSON.stringify(z)},
-          radius: 10,
-          colorscale: ${JSON.stringify(colorscale)}
+          radius: 3,
+          colorscale: ${JSON.stringify(colorscale)},
         }];
         var layout = {
           margin: {l:0, t:0, b:0, r:0},
           mapbox: {
-            style: "open-street-map",
+            style: "carto-darkmatter",
             center: {lat: ${centerLat}, lon: ${centerLon}},
             zoom: 10
           },
@@ -77,9 +93,7 @@ export function genHeatMapHTML(data: DataRow[]): string {
 }
 
 // Generates a clusters HTML string that overlays primary cluster markers with secondary clustering boundaries.
-// The primary clusters are plotted as markers and the secondary (patrol) boundaries are overlaid as lines+markers with no legend.
 export async function genClustersHTML(data: DataRow[], n: number): Promise<string> {
-  // Import ml-kmeans dynamically (assumed installed)
   const { kmeansGenerator } = await import("ml-kmeans");
   const features = data
     .filter(row =>
@@ -89,19 +103,34 @@ export async function genClustersHTML(data: DataRow[], n: number): Promise<strin
       !isNaN(Number(row.Longitude))
     )
     .map(row => [Number(row.Latitude), Number(row.Longitude)] as [number, number]);
-  const primaryKmeans = kmeansGenerator(features, n);
-  let primaryResult: any = null;
+  // Supply an empty options object.
+  const primaryKmeans = kmeansGenerator(features, n, {}) as IterableIterator<{ clusters: number[] }>;
+  let primaryResult: { clusters: number[] } | null = null;
   for (const iteration of primaryKmeans) {
     primaryResult = iteration;
   }
   const primaryClusters = primaryResult?.clusters;
-  const uniquePrimary = Array.from(new Set(primaryClusters));
-  const colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
-  const primaryTraces: any[] = [];
-  uniquePrimary.forEach(clusterId => {
-    const clusterPoints = data.filter((row, idx) => idx < primaryClusters.length && primaryClusters[idx] === clusterId);
-    const lat = clusterPoints.map(row => Number(row.Latitude));
-    const lon = clusterPoints.map(row => Number(row.Longitude));
+  const uniquePrimary = Array.from(new Set(primaryClusters)) as number[];
+  const colors = [
+    "#1f77b4",
+    "#ff7f0e",
+    "#2ca02c",
+    "#d62728",
+    "#9467bd",
+    "#8c564b",
+    "#e377c2",
+    "#7f7f7f",
+    "#bcbd22",
+    "#17becf"
+  ];
+  const primaryTraces: ScatterMapboxTrace[] = [];
+  uniquePrimary.forEach((clusterId: number) => {
+    const clusterPoints = data.filter(
+      (row, idx) => idx < primaryClusters!.length && primaryClusters![idx] === clusterId
+    );
+    const lat = clusterPoints.map((row) => Number(row.Latitude));
+    const lon = clusterPoints.map((row) => Number(row.Longitude));
+    // Explicitly use clusterId as number.
     const color = colors[clusterId % colors.length];
     primaryTraces.push({
       type: "scattermapbox",
@@ -113,11 +142,10 @@ export async function genClustersHTML(data: DataRow[], n: number): Promise<strin
     });
   });
 
-  // Get secondary boundaries using the analyze function.
   const { analyze } = await import("./clustering");
   const secondary = await analyze(data, n);
-  const secondaryTraces: any[] = [];
-  secondary.longs.forEach((lonPair, index) => {
+  const secondaryTraces: ScatterMapboxTrace[] = [];
+  secondary.longs.forEach((lonPair: number[], index: number) => {
     const latPair = secondary.lats[index];
     const color = colors[index % colors.length];
     secondaryTraces.push({
@@ -127,14 +155,13 @@ export async function genClustersHTML(data: DataRow[], n: number): Promise<strin
       lat: latPair,
       line: { width: 3, color: color },
       marker: { size: 6, color: color },
-      showlegend: false,  // Remove legend for secondary boundaries.
+      showlegend: false,
       name: `Secondary Boundary ${index}`
     });
   });
-  const allTraces = primaryTraces.concat(secondaryTraces);
-
-  const allLats = data.map(row => Number(row.Latitude));
-  const allLons = data.map(row => Number(row.Longitude));
+  const allTraces: ScatterMapboxTrace[] = primaryTraces.concat(secondaryTraces);
+  const allLats = data.map((row) => Number(row.Latitude));
+  const allLons = data.map((row) => Number(row.Longitude));
   const centerLat = allLats.length ? (getMin(allLats) + getMax(allLats)) / 2 : 0;
   const centerLon = allLons.length ? (getMin(allLons) + getMax(allLons)) / 2 : 0;
 
@@ -179,7 +206,6 @@ export async function genClustersHTML(data: DataRow[], n: number): Promise<strin
   `;
 }
 
-// CombinedVisualization renders two iframes side-by-side: patrol plot on left and heatmap on right.
 type CombinedVisualizationProps = {
   heatmapHtml: string;
   clustersHtml: string;
@@ -188,7 +214,7 @@ type CombinedVisualizationProps = {
 export default function CombinedVisualization({ heatmapHtml, clustersHtml }: CombinedVisualizationProps) {
   return (
     <div style={{ display: "flex", flexDirection: "row", height: "100%" }}>
-      {/* Patrol (clusters with secondary boundaries) on left */}
+      {/* Patrol plot (clusters with secondary boundaries) on left */}
       <div style={{ flex: 1, borderRight: "1px solid #ccc" }}>
         {clustersHtml ? (
           <iframe srcDoc={clustersHtml} style={{ width: "100%", height: "100%", border: 0 }} title="Patrol Plot" />

@@ -7,9 +7,9 @@ import { DataRow } from "./types";
 
 export default function HomePage() {
   const [city, setCity] = useState<string>("Chicago");
-  const [startTime, setStartTime] = useState<string>("08:45:00");
-  const [endTime, setEndTime] = useState<string>("17:35:00");
-  const [n, setN] = useState<number>(85);
+  const [startTime, setStartTime] = useState<string>("08:00:00");
+  const [endTime, setEndTime] = useState<string>("14:00:00");
+  const [n, setN] = useState<number>(8);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DataRow[]>([]);
@@ -118,7 +118,6 @@ export default function HomePage() {
       if (filteredData.length === 0) {
         throw new Error(`No data available for the selected time range in ${city}`);
       }
-      // Generate visualization HTML only when button is clicked.
       const heatmapContent = genHeatMapHTML(filteredData);
       const clustersContent = await genClustersHTML(filteredData, n);
       setHeatmapHtml(heatmapContent);
@@ -134,7 +133,8 @@ export default function HomePage() {
   return (
     <div className="flex flex-col lg:flex-row h-screen" style={{ backgroundColor: "#ffffff", color: "#000000" }}>
       <div className="lg:w-1/4 p-6 bg-white overflow-auto text-black">
-        <h1 className="text-3xl font-bold mb-6">Project Nikolaj</h1>
+        <h1 className="text-3xl mb-1 font-lemon-milk">Project Nikolaj</h1>
+        <p className="text-sm mb-10">Police Patrol Route Optimization System</p>
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
             <strong>Error:</strong> {error}

@@ -1,8 +1,17 @@
 import { DataRow } from "../types";
 import { alphaShape } from "./alphaShape";
-
-// Note: We assume that ml-kmeans is installed.
 import { kmeansGenerator } from "ml-kmeans";
+
+// Define an interface for the k-means result.
+// This interface assumes that the centroids array may contain either raw number arrays or objects
+// with a "centroid" property that is a number array.
+interface KMeansResult {
+  clusters: number[];
+  centroids: Array<{ centroid: [number, number] } | [number, number]>;
+  converged: boolean;
+  iterations: number;
+  distance: (a: number[], b: number[]) => number;
+}
 
 export async function analyze(data: DataRow[], nCluster: number): Promise<{ longs: number[][]; lats: number[][] }> {
   // Primary clustering on [Latitude, Longitude]
@@ -19,8 +28,9 @@ export async function analyze(data: DataRow[], nCluster: number): Promise<{ long
   if (actualNClusters < 1 || features.length < 1) {
     return { longs: [], lats: [] };
   }
-  const primaryKmeans = kmeansGenerator(features, actualNClusters);
-  let primaryResult: any = null;
+  // Supply an empty options object as the third argument.
+  const primaryKmeans = kmeansGenerator(features, actualNClusters, {}) as IterableIterator<KMeansResult>;
+  let primaryResult: KMeansResult | null = null;
   for (const iteration of primaryKmeans) {
     primaryResult = iteration;
   }
@@ -56,26 +66,28 @@ export async function analyze(data: DataRow[], nCluster: number): Promise<{ long
     console.log("  Computed number of sub-clusters:", subClusters);
     console.log("  Sample clusterPoints (first 5):", clusterPoints.slice(0, 5));
 
-    // Run secondary clustering on the clusterPoints
-    const subKmeans = kmeansGenerator(clusterPoints, subClusters);
-    let subResult: any = null;
+    // Run secondary clustering on the clusterPoints (supply an empty options object)
+    const subKmeans = kmeansGenerator(clusterPoints, subClusters, {}) as IterableIterator<KMeansResult>;
+    let subResult: KMeansResult | null = null;
     let iterationCount = 0;
     for (const iteration of subKmeans) {
       subResult = iteration;
       iterationCount++;
     }
     console.log("  Secondary clustering iterations:", iterationCount);
-
     console.log("  Full subResult object:", subResult);
-    console.log("  Keys in subResult:", Object.keys(subResult));
+    console.log("  Keys in subResult:", subResult ? Object.keys(subResult) : []);
 
     if (!subResult || !subResult.centroids) {
       console.warn(`  Sub clustering failed for primary cluster ${clusterId} (no centroids found).`);
       continue;
     }
 
-    // Adjusted extraction: use c.centroid if exists; otherwise, use c directly.
-    const centers = subResult.centroids.map((c: any) => c.centroid ? c.centroid : c) as [number, number][];
+    // Extract sub cluster centers.
+    const centers = subResult.centroids.map((c) => {
+      // If c has a 'centroid' property, use it; otherwise, assume c itself is a center.
+      return (typeof c === "object" && "centroid" in c) ? (c as { centroid: [number, number] }).centroid : (c as [number, number]);
+    }) as [number, number][];
     console.log("  Extracted sub-cluster centers:", centers);
 
     if (centers.length < 4) {
